@@ -1,0 +1,57 @@
+Installing Ansible
+------------------
+
+Ref. https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-ansible-on-ubuntu-18-04
+
+apt install software-properties-common
+
+apt-add-repository ppa:ansible/ansible
+
+apt update
+
+apt install ansible
+------------------------
+
+Link.
+
+https://docs.ansible.com/ansible/latest/cli/ansible-playbook.html
+
+
+List roles.
+
+ansible-galaxy list -p roles
+
+Error:
+[WARNING]: Could not find aptitude. Using apt-get instead
+
+Solu.
+
+apt: 
+  force_apt_get: True
+
+
+Deploy the Roles using anible-playbook
+-----------------
+
+https://linuxacademy.com/blog/linux-academy/ansible-roles-explained/
+
+gather_facts: false <-- Will speed up the deployment by disabling the gathering gather_facts
+
+--------------------
+
+Create new user
+
+- to install mkpasswd
+sudo apt install whois
+
+- To install makepasswd
+sudo apt install makepasswd
+
+
+
+
+
+
+
+
+

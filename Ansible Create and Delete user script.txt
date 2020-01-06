@@ -1,0 +1,44 @@
+#!/bin/bash
+
+
+while true; do
+  read -p "Do you wish to create the new user?" yn
+  case $yn in
+    [Yy]* )
+            echo ""
+            echo "Checking if the User Inventory file is present..."
+            echo ""
+            Create_User_FILE=/etc/ansible/roles/usermgmt/userlist.txt
+            if [ -f "$Create_User_FILE" ]; then
+                while IFS= read -r line; do
+                ansible-playbook usermgmt.yml --extra-vars "user_name=$line" --skip-tags "delete"
+                done < userlist.txt
+               # break;;
+            else
+               echo "File is not present. Please ensure to have the User Inventory file."
+            fi;;
+    [Nn]* )
+            while true; do
+              read -p "Do you wish to delete the existing user?" yn
+              case $yn in
+                [Yy]* )
+
+                      echo ""
+                      echo "Checking if the User Inventory file is present..."
+                      echo ""
+                      Del_User_FILE=/etc/ansible/roles/usermgmt/deluserlist.txt
+                      if [ -f "$Del_User_FILE" ]; then
+                         while IFS= read -r line; do
+                            ansible-playbook usermgmt.yml --extra-vars "user_name=$line" --tags "delete"
+                         done < deluserlist.txt
+               #          break;;
+                      else
+                        echo "File is not present. Please ensure to have the User Inventory file."
+                      fi;;
+                [Nn]* ) exit;;
+                * ) echo "Please answer yes or no.";;
+              esac
+            done;;
+     * ) echo "Please answer yes or no.";;
+  esac
+done

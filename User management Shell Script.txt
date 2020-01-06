@@ -1,0 +1,291 @@
+To Get the Server Detail.
+server=`more /tmp/user.log  |grep PLAY | awk -vRS="]" -vFS="[" '{print $2}' | sed '/^$/d'`
+echo $server
+
+To get the user name
+user=`more /tmp/user.log  |grep -e ' "msg": "Password'| awk '{print $4}'| sed  's/[/\"]//g'`
+echo $user
+
+To get the user Password
+password=`more /tmp/user.log  |grep -e ' "msg": "Password'| awk '{print $6}'| sed  's/[/\"]//g'`
+echo $password
+
+
+
+tasks:
+
+  - yum: 
+    name={{ item }} 
+    state=installed
+    with_items:
+       - httpd
+       - memcached
+    tags:
+       - packages
+
+  - name: some other task
+    ..
+    tags:
+      - some other tag
+
+
+      https://www.linux.com/tutorials/how-manage-users-groups-linux/
+
+
+
+
+
+      awk 'x[$1]++ == 1 { print $1 " is duplicated"}' userlist.txt
+
+
+
+
+-----------------------------------
+## Script to list the user primary and secondary groups
+
+#!/bin/bash
+
+#user= awk -F':' '{ print $1,$4}' /etc/group
+
+#echo "Name of the User: $user"
+PASSFILE="/etc/passwd"
+GRPFILE="/etc/group"
+
+
+#for i in $(cat /etc/passwd  | cut -d: -f1); do
+for i in $(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd); do
+          # echo -n $i ": "
+         echo  "User Details for: $i"
+         gid=`grep $i $PASSFILE | cut -d : -f 4`
+         echo "GID is: $gid"
+         pri_grp=`grep $gid $GRPFILE | cut -d : -f 1`
+         echo "Primary Group is: $pri_grp"
+
+         sec_grp=`grep $i /etc/group | cut -d: -f1 | tr "\n" " "`
+         echo "Secondary Group is: $sec_grp"
+         done
+
+
+
+-----------------------------------
+
+
+- name: "Copy the Shell script to Target Servers"
+  copy:
+    src: /etc/ansible/roles/list-users/files/user.sh
+    dest: /tmp
+    mode: '0777'
+  become: true
+
+- name: "Execute the Shell Script"
+  shell: /tmp/user.sh
+  register: user
+- debug: var=user.stdout_lines
+
+
+-----------------------------------------------------------------------------------------------
+List User Script
+------------
+
+---
+
+#- name: Get the Group on remote server
+
+
+#- name: "Check if the file exist on remote"
+#  stat:
+#    path: /tmp/user.sh
+#  register: copy
+
+
+
+- name: "Copy the Shell script to Target Servers"
+  copy:
+    src: /etc/ansible/roles/list-users/files/user.sh
+    dest: /tmp
+    mode: '0777'
+  remote_user: ansible
+  become: true
+  become_method: sudo
+  tags:
+    - copy
+
+  #  when: copy.stat.exists == False
+
+  #- name: "Check if the file exist on remote"
+  #stat:
+  #  path: /tmp/user.sh
+  #register: copy
+
+
+
+- name: "Execute the Shell Script"
+  shell: /tmp/user.sh
+  register: user
+  tags:
+    - listuser
+- debug: var=user.stdout_lines
+  # when: copy.changed
+  #tags:
+  #  - listuser
+
+- name: Create Group Superuser
+  remote_user: ansible
+  become: yes
+  become_method: sudo
+  group:
+    name: superuser
+    state: present
+
+- name: Create Group Ansible
+  remote_user: ansible
+  become: yes
+  become_method: sudo
+  group:
+    name: ansible
+    state: present
+
+
+
+
+- name: Create Group Tivoli
+  remote_user: ansible
+  become: yes
+  become_method: sudo
+  group:
+        name: tivoli
+        state: present
+
+- name: create group Gragana
+  remote_user: ansible
+  become: yes
+  become_method: sudo
+  group:
+        name: grafana
+        state: present
+
+- name: create group ElasticSearch
+  remote_user: ansible
+  become: yes
+  become_method: sudo
+  group:
+    name: elk
+    state: present
+
+- name: Generate password for new user
+  shell: makepasswd --chars=20
+  register: user_password
+
+- name: Generate encrypted password
+  shell: mkpasswd --method=SHA-512 {{ user_password.stdout }}
+  register: encrypted_user_password
+
+  #- pause:
+  #    prompt: "Please enter the group name"
+  #  #minutes: 1
+  #  seconds: 7
+  #  echo: yes
+  #register: result
+  #- set_fact:
+  #  gpname: "{{ result.user_input }}"
+  #- debug:
+  #  var: gpname
+
+- name: Create user account
+  tags:
+    - create
+  user:
+        name: "{{ user_name }}"
+        password: "{{ encrypted_user_password.stdout }}"
+        state: "present"
+        group: "{{ primary_group }}"
+        groups: "{{ secondry_group}}"
+        shell: "/bin/bash"
+        append: yes
+        update_password: on_create
+  register: user_created
+
+- name: Delete user account
+  tags:
+    - delete
+  user:
+       name: "{{ user_name }}"
+       state: "absent"
+       force: yes
+
+- name: Force user to change password
+  shell: chage -d 0 "{{ user_name }}"
+  when: user_created.changed
+
+- name: User created
+  debug: msg="Password for \"{{ user_name }}\" is \"{{ user_password.stdout }}\""
+  when: user_created.changed
+
+
+-----------------------------------------------------------
+
+shell script
+
+
+
+#!/bin/bash
+
+
+unset server
+unset user
+unset password
+
+
+while true; do
+  read -p "Do you wish to create the new user?" yn
+  case $yn in
+    [Yy]* )
+            echo ""
+            echo "Checking if the User Inventory file is present..."
+            echo ""
+            Create_User_FILE=/etc/ansible/roles/usermgmt/userlist.txt
+            if [ -f "$Create_User_FILE" ]; then
+                while IFS= read -r line; do
+                  user=`echo $line | awk '{ print $1}'`
+                  prim_group=`echo $line | awk '{ print $2}'`
+                  sec_group=`echo $line | awk '{ print $3}'`
+                  ansible-playbook usermgmt.yml --extra-vars "user_name=$user primary_group=$prim_group secondry_group=$sec_group"  --skip-tags "delete"
+#                    server=`more /tmp/user.log  |grep PLAY | awk -vRS="]" -vFS="[" '{print $2}' | sed '/^$/d'`
+#                   user=`more /tmp/user.log  |grep -e ' "msg": "Password'| awk '{print $4}'| sed  's/[/\"]//g'`
+#                   password=`more /tmp/user.log  |grep -e ' "msg": "Password'| awk '{print $6}'| sed  's/[/\"]//g'`
+#                      sudo touch /etc/ansible/roles/usermgmt/userinventory.txt
+#                     echo "$server $user $password" >> /etc/ansible/roles/usermgmt/userinventory.txt
+#                     unset server
+#                     unset user
+#                     unset password
+                done < userlist.txt
+#              cat /etc/ansible/roles/usermgmt/userinventory.txt
+            else
+               echo "File is not present. Please ensure to have the User Inventory file."
+            fi;;
+    [Nn]* )
+            while true; do
+              read -p "Do you wish to delete the existing user?" yn
+              case $yn in
+                [Yy]* )
+
+                      echo ""
+                      echo "Checking if the User Inventory file is present..."
+                      echo ""
+                      Del_User_FILE=/etc/ansible/roles/usermgmt/deluserlist.txt
+                      if [ -f "$Del_User_FILE" ]; then
+                         while IFS= read -r line; do
+                            ansible-playbook usermgmt.yml --extra-vars "user_name=$line" --tags "delete"
+                         done < deluserlist.txt
+               #          break;;
+                      else
+                        echo "File is not present. Please ensure to have the User Inventory file."
+                      fi;;
+                [Nn]* ) exit;;
+                * ) echo "Please answer yes or no.";;
+              esac
+            done;;
+     * ) echo "Please answer yes or no.";;
+  esac
+done
+
